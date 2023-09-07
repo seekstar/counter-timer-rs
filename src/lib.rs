@@ -8,41 +8,49 @@ mod tests;
 
 use core::marker::PhantomData;
 use enum_iterator::{cardinality, Sequence};
-use std::sync::atomic::{self, AtomicUsize};
+use std::sync::atomic::{self, AtomicU64};
+use std::time::Duration;
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct Status {
-    pub count: usize,
-    pub nsec: usize,
+    pub count: u64,
+    pub time: Duration,
 }
 #[cfg(test)]
 impl Default for Status {
     fn default() -> Self {
-        Status { count: 0, nsec: 0 }
+        Status {
+            count: 0,
+            time: Duration::default(),
+        }
     }
 }
 
 struct Timer {
-    count: AtomicUsize,
-    nsec: AtomicUsize,
+    count: AtomicU64,
+    nsec: AtomicU64,
 }
 impl Default for Timer {
     fn default() -> Timer {
         Timer {
-            count: AtomicUsize::new(0),
-            nsec: AtomicUsize::new(0),
+            count: AtomicU64::new(0),
+            nsec: AtomicU64::new(0),
         }
     }
 }
 impl Timer {
-    fn add(&self, nsec: usize) {
+    fn add(&self, time: Duration) {
         self.count.fetch_add(1, atomic::Ordering::Relaxed);
-        self.nsec.fetch_add(nsec, atomic::Ordering::Relaxed);
+        self.nsec.fetch_add(
+            time.as_nanos().try_into().unwrap(),
+            atomic::Ordering::Relaxed,
+        );
     }
     fn status(&self) -> Status {
+        let nsec = self.nsec.load(atomic::Ordering::Relaxed);
         Status {
             count: self.count.load(atomic::Ordering::Relaxed),
-            nsec: self.nsec.load(atomic::Ordering::Relaxed),
+            time: Duration::from_nanos(nsec),
         }
     }
 }
@@ -56,8 +64,8 @@ impl Timers {
         timers.resize_with(num_types, Timer::default);
         Timers { timers }
     }
-    fn add(&self, t: usize, nsec: usize) {
-        self.timers[t].add(nsec);
+    fn add(&self, t: usize, time: Duration) {
+        self.timers[t].add(time);
     }
     fn status(&self) -> Vec<Status> {
         let mut status = Vec::with_capacity(self.timers.len());
@@ -79,8 +87,8 @@ impl<Type: Sequence + Into<usize>> TypedTimers<Type> {
             _type: PhantomData::default(),
         }
     }
-    pub fn add(&self, t: Type, nsec: usize) {
-        self.timers.add(t.into(), nsec);
+    pub fn add(&self, t: Type, time: Duration) {
+        self.timers.add(t.into(), time);
     }
     pub fn status(&self) -> Vec<Status> {
         self.timers.status()
