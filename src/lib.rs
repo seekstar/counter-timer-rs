@@ -26,7 +26,7 @@ impl Default for Status {
     }
 }
 
-struct Timer {
+pub struct Timer {
     count: AtomicU64,
     nsec: AtomicU64,
 }
@@ -39,14 +39,14 @@ impl Default for Timer {
     }
 }
 impl Timer {
-    fn add(&self, time: Duration) {
+    pub fn add(&self, time: Duration) {
         self.count.fetch_add(1, atomic::Ordering::Relaxed);
         self.nsec.fetch_add(
             time.as_nanos().try_into().unwrap(),
             atomic::Ordering::Relaxed,
         );
     }
-    fn status(&self) -> Status {
+    pub fn status_nonatomic(&self) -> Status {
         let nsec = self.nsec.load(atomic::Ordering::Relaxed);
         Status {
             count: self.count.load(atomic::Ordering::Relaxed),
@@ -64,13 +64,16 @@ impl Timers {
         timers.resize_with(num_types, Timer::default);
         Timers { timers }
     }
+    fn timer(&self, t: usize) -> &Timer {
+        &self.timers[t]
+    }
     fn add(&self, t: usize, time: Duration) {
-        self.timers[t].add(time);
+        self.timer(t).add(time);
     }
     fn status(&self) -> Vec<Status> {
         let mut status = Vec::with_capacity(self.timers.len());
         for timer in self.timers.as_slice() {
-            status.push(timer.status());
+            status.push(timer.status_nonatomic());
         }
         status
     }
@@ -86,6 +89,9 @@ impl<Type: Sequence + Into<usize>> TypedTimers<Type> {
             timers: Timers::new(cardinality::<Type>()),
             _type: PhantomData::default(),
         }
+    }
+    pub fn timer(&self, t: Type) -> &Timer {
+        self.timers.timer(t.into())
     }
     pub fn add(&self, t: Type, time: Duration) {
         self.timers.add(t.into(), time);

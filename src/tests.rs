@@ -38,7 +38,9 @@ mod tests {
         }
         let timers = TypedTimers::<TimerType>::new();
         assert_eq!(timers.status(), vec![crate::Status::default()]);
-        timers.add(TimerType::Timer1, Duration::from_nanos(233));
+        timers
+            .timer(TimerType::Timer1)
+            .add(Duration::from_nanos(233));
         assert_eq!(
             timers.status(),
             vec![crate::Status {
@@ -46,7 +48,9 @@ mod tests {
                 time: Duration::from_nanos(233),
             }]
         );
-        timers.add(TimerType::Timer1, Duration::from_nanos(2333 - 233));
+        timers
+            .timer(TimerType::Timer1)
+            .add(Duration::from_nanos(2333 - 233));
         assert_eq!(
             timers.status(),
             vec![crate::Status {
